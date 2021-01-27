@@ -1,0 +1,7 @@
+difference() {
+	cylinder($fn = 100, $fa = 12, $fs = 2, h = 10, r1 = 5, r2 = 5, center = false);
+	multmatrix() {
+		cylinder($fn = 100, $fa = 12, $fs = 2, h = 20, r1 = 2.5, r2 = 2.5, center = false);
+	}
+}
+

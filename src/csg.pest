@@ -1,0 +1,43 @@
+WHITESPACE = _{ (" " | "\t" | "\n")+ }
+
+identifier = @{('a' .. 'z' | 'A' .. 'Z' | "$") ~ (ASCII_ALPHANUMERIC | "_")* }
+
+integer = @{('0'..'9')+}
+
+float_constant = @{integer ~ ("." ~ integer)?}
+
+boolean_constant = {"true" | "false"}
+
+program = {
+    SOI ~
+    statement* ~
+    EOI
+}
+
+statement = {
+    block_function |
+    function ~ ";"
+}
+
+block_function = {
+    identifier ~ "(" ~ ")" ~ block
+}
+
+function = {
+    identifier ~ "(" ~ argument_list ~ ")"
+}
+
+block = {
+    "{" ~
+    statement* ~
+    "}"
+}
+
+argument_list = {
+    argument ~ ("," ~ argument)* ~ ","?
+}
+
+argument = {
+    identifier ~ "=" ~ float_constant |
+    identifier ~ "=" ~ boolean_constant
+}
