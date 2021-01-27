@@ -4,32 +4,24 @@ identifier = @{('a' .. 'z' | 'A' .. 'Z' | "$") ~ (ASCII_ALPHANUMERIC | "_")* }
 
 integer = @{('0'..'9')+}
 
-float_constant = @{integer ~ ("." ~ integer)?}
+float_constant = @{"-"? ~ integer ~ ("." ~ integer)?}
 
 boolean_constant = {"true" | "false"}
 
 program = {
     SOI ~
-    statement* ~
+    function_call* ~
     EOI
 }
 
-statement = {
-    block_function |
-    function ~ ";"
-}
-
-block_function = {
-    identifier ~ "(" ~ ")" ~ block
-}
-
-function = {
-    identifier ~ "(" ~ argument_list ~ ")"
+function_call = {
+    identifier ~ "(" ~ argument_list? ~ ")" ~ block |
+    identifier ~ "(" ~ argument_list? ~ ")" ~ ";"
 }
 
 block = {
     "{" ~
-    statement* ~
+    function_call* ~
     "}"
 }
 
@@ -39,5 +31,22 @@ argument_list = {
 
 argument = {
     identifier ~ "=" ~ float_constant |
-    identifier ~ "=" ~ boolean_constant
+    identifier ~ "=" ~ boolean_constant |
+    matrix
+}
+
+matrix = {
+    "[" ~ matrix_rows ~ "]"
+}
+
+matrix_rows = {
+    matrix_row ~ ("," ~ matrix_row)* ~ ","?
+}
+
+matrix_row = {
+    "[" ~ matrix_numbers ~ "]"
+}
+
+matrix_numbers = {
+    float_constant ~ ("," ~ float_constant)* ~ ","?
 }

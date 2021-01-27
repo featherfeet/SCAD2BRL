@@ -28,6 +28,6 @@ fn main() {
 
     // Parse the assembly file.
     let parsed_csg = CSGParser::parse(Rule::program, &raw_csg);
-    pest_ascii_tree::print_ascii_tree(parsed_csg);
-//    let program = parsed_csg.expect("Failed to parse CSG!").next().expect("No program found.").into_inner();
+    pest_ascii_tree::print_ascii_tree(parsed_csg.clone());
+    let program = parsed_csg.expect("Failed to parse CSG!").next().expect("No program found.").into_inner();
 }
