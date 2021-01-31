@@ -136,6 +136,90 @@ fn generate_ast(pair: Pair<'_, Rule>) -> Option<ASTNode> {
     }
 }
 
+enum CSGOperation {
+    Union,
+    Difference,
+    Intersection
+}
+
+fn generate_mged_code(mut solid_number: i64, combination_number: i64, csg_operation: CSGOperation, ast: Vec<ASTNode>) -> String {
+    let mut mged_code = String::new();
+    let mut child_transformation_code = String::new();
+    let mut children: Vec<String> = vec![];
+    
+    for ast_node in ast {
+        match ast_node {
+            ASTNode::Cylinder { h, r1, r2, center } => {
+                let z: f64 = if center {
+                    -h / 2.0
+                }
+                else {
+                    0.0
+                };
+                let name = format!("cylinder{}.s", solid_number);
+                solid_number += 1;
+                mged_code += &format!("in {} trc 0 0 {} 0 0 {} {} {}\n", name, z, h, r1, r2);
+                children.push(name);
+            }
+            ASTNode::Difference { block } => {
+                match *block {
+                    ASTNode::Block { statements } => {
+                        let name = format!("comb{}.c", combination_number + 1);
+                        mged_code += &generate_mged_code(solid_number, combination_number + 1, CSGOperation::Difference, statements);
+                        children.push(name);
+                    }
+                    _ => {}
+                }
+            }
+            ASTNode::MultMatrix { matrix, block } => {
+                match *block {
+                    ASTNode::Block { statements } => {
+                        let name = format!("comb{}.c", combination_number + 1);
+                        mged_code += &generate_mged_code(solid_number, combination_number + 1, CSGOperation::Union, statements);
+                        children.push(name.clone());
+                        let mut matrix_string = String::new();
+                        for matrix_row in matrix {
+                            for matrix_number in matrix_row {
+                                matrix_string += &format!(" {}", matrix_number);
+                            }
+                        }
+                        child_transformation_code += &format!("arced comb{}.c/{} matrix rmul{}\n", combination_number, name, matrix_string);
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+
+    mged_code += &format!("comb comb{}.c", combination_number);
+    match csg_operation {
+        CSGOperation::Union => {
+            for child in children {
+                mged_code += &format!(" u {}", child);
+            }
+        }
+        CSGOperation::Difference => {
+            for (i, child) in children.iter().enumerate() {
+                if i == 0 {
+                    mged_code += &format!(" u {}", child);
+                }
+                else {
+                    mged_code += &format!(" - {}", child);
+                }
+            }
+        }
+        CSGOperation::Intersection => {
+            println!("Intersections not supported yet.");
+        }
+    }
+    mged_code += &"\n".to_string();
+
+    mged_code += &child_transformation_code;
+
+    mged_code
+}
+
 fn main() {
     // Read in the CSG file.
     let args: Vec<String> = env::args().collect();
@@ -150,7 +234,7 @@ fn main() {
 
     // Parse the CSG file.
     let parsed_csg = CSGParser::parse(Rule::program, &raw_csg);
-//    pest_ascii_tree::print_ascii_tree(parsed_csg.clone());
+    //pest_ascii_tree::print_ascii_tree(parsed_csg.clone());
     let program = parsed_csg.expect("Failed to parse CSG!").next().expect("No program found.").into_inner();
 
     // Generate an AST from the CSG file.
@@ -162,5 +246,9 @@ fn main() {
         }
     }
 
-    println!("{:#?}", ast);
+    //println!("{:#?}", ast);
+    
+    // Generate MGED (BRL-CAD geometry editor) code from the AST.
+    let mged_code = generate_mged_code(0, 0, CSGOperation::Union, ast);
+    print!("{}", mged_code);
 }
