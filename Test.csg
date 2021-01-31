@@ -4,4 +4,3 @@ difference() {
 		cylinder($fn = 100, $fa = 12, $fs = 2, h = 20, r1 = 2.5, r2 = 2.5, center = false);
 	}
 }
-
