@@ -26,6 +26,9 @@ pub enum ASTNode {
     Difference {
         block: Box<ASTNode>
     },
+    Group {
+        block: Box<ASTNode>
+    },
     MultMatrix {
         matrix: Vec<Vec<f64>>,
         block: Box<ASTNode>
@@ -110,12 +113,15 @@ fn generate_ast(pair: Pair<'_, Rule>) -> Option<ASTNode> {
                     }
                 }
                 // If the next pair in the parse tree is a block, then the function is a
-                // difference() call.
+                // difference() or group() call.
                 Rule::block => {
                     let block = generate_block(next_pair.into_inner()).unwrap();
                     match identifier {
                         "difference" => {
                             Some(ASTNode::Difference { block: Box::new(block) })
+                        }
+                        "group" => {
+                            Some(ASTNode::Group { block: Box::new(block) })
                         }
                         _ => {
                             Some(ASTNode::Unknown { }) // TODO
@@ -142,10 +148,12 @@ enum CSGOperation {
     Intersection
 }
 
-fn generate_mged_code(mut solid_number: i64, combination_number: i64, csg_operation: CSGOperation, ast: Vec<ASTNode>) -> String {
+fn generate_mged_code(solid_number: &mut i64, combination_number: &mut i64, csg_operation: CSGOperation, ast: Vec<ASTNode>) -> String {
     let mut mged_code = String::new();
     let mut child_transformation_code = String::new();
     let mut children: Vec<String> = vec![];
+
+    let my_combination_number = *combination_number;
     
     for ast_node in ast {
         match ast_node {
@@ -157,15 +165,16 @@ fn generate_mged_code(mut solid_number: i64, combination_number: i64, csg_operat
                     0.0
                 };
                 let name = format!("cylinder{}.s", solid_number);
-                solid_number += 1;
+                *solid_number += 1;
                 mged_code += &format!("in {} trc 0 0 {} 0 0 {} {} {}\n", name, z, h, r1, r2);
                 children.push(name);
             }
             ASTNode::Difference { block } => {
                 match *block {
                     ASTNode::Block { statements } => {
-                        let name = format!("comb{}.c", combination_number + 1);
-                        mged_code += &generate_mged_code(solid_number, combination_number + 1, CSGOperation::Difference, statements);
+                        *combination_number += 1;
+                        let name = format!("comb{}.c", combination_number);
+                        mged_code += &generate_mged_code(solid_number, combination_number, CSGOperation::Difference, statements);
                         children.push(name);
                     }
                     _ => {}
@@ -174,8 +183,9 @@ fn generate_mged_code(mut solid_number: i64, combination_number: i64, csg_operat
             ASTNode::MultMatrix { matrix, block } => {
                 match *block {
                     ASTNode::Block { statements } => {
-                        let name = format!("comb{}.c", combination_number + 1);
-                        mged_code += &generate_mged_code(solid_number, combination_number + 1, CSGOperation::Union, statements);
+                        *combination_number += 1;
+                        let name = format!("comb{}.c", combination_number);
+                        mged_code += &generate_mged_code(solid_number, combination_number, CSGOperation::Union, statements);
                         children.push(name.clone());
                         let mut matrix_string = String::new();
                         for matrix_row in matrix {
@@ -183,7 +193,18 @@ fn generate_mged_code(mut solid_number: i64, combination_number: i64, csg_operat
                                 matrix_string += &format!(" {}", matrix_number);
                             }
                         }
-                        child_transformation_code += &format!("arced comb{}.c/{} matrix rmul{}\n", combination_number, name, matrix_string);
+                        child_transformation_code += &format!("arced comb{}.c/{} matrix rmul{}\n", my_combination_number, name, matrix_string);
+                    }
+                    _ => {}
+                }
+            }
+            ASTNode::Group { block } => {
+                match *block {
+                    ASTNode::Block { statements } => {
+                        *combination_number += 1;
+                        let name = format!("comb{}.c", combination_number);
+                        mged_code += &generate_mged_code(solid_number, combination_number, CSGOperation::Union, statements);
+                        children.push(name);
                     }
                     _ => {}
                 }
@@ -192,7 +213,7 @@ fn generate_mged_code(mut solid_number: i64, combination_number: i64, csg_operat
         }
     }
 
-    mged_code += &format!("comb comb{}.c", combination_number);
+    mged_code += &format!("comb comb{}.c", my_combination_number);
     match csg_operation {
         CSGOperation::Union => {
             for child in children {
@@ -249,6 +270,8 @@ fn main() {
     //println!("{:#?}", ast);
     
     // Generate MGED (BRL-CAD geometry editor) code from the AST.
-    let mged_code = generate_mged_code(0, 0, CSGOperation::Union, ast);
+    let mut solid_number: i64 = 0;
+    let mut combination_number: i64 = 0;
+    let mged_code = generate_mged_code(&mut solid_number, &mut combination_number, CSGOperation::Union, ast);
     print!("{}", mged_code);
 }
